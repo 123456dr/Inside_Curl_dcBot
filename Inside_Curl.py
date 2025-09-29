@@ -3,6 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 import datetime
 import os
+import threading
+import os
+from flask import Flask
 
 TOKEN = os.environ['DISCORD_BOT_TOKEN']
 GUILD_ID = int(os.getenv("GUILD_ID"))
@@ -76,4 +79,22 @@ async def on_voice_state_update(member, before, after):
 
             del voice_sessions[user_id]
 
+
+
+# === Fake web server ===
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running!", 200
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_web).start()
+
+
+
 bot.run(TOKEN)
+
