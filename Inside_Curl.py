@@ -1,6 +1,6 @@
 # Claude
 # =========================
-# Inside_Curl.py (優化版)
+# Inside_Curl.py (修正版)
 # Discord Bot + FastAPI + 健康檢查
 # =========================
 import os
@@ -78,7 +78,7 @@ def status():
 def run_web():
     """啟動 FastAPI Web Service"""
     port = int(os.environ.get("PORT", 10000))
-    print(f"🌐 FastAPI 正在啟動於 Port {port}...")
+    print(f"🌐 FastAPI 啟動於 Port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
 
 # =========================
@@ -114,22 +114,10 @@ async def on_ready():
     print(f"📡 伺服器 ID: {GUILD_ID}")
     print(f"📝 記錄頻道 ID: {LOG_CHANNEL_ID}")
     
-    # 檢查記錄頻道
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
-    if log_channel:
-        print(f"✅ 找到記錄頻道: #{log_channel.name}")
-        try:
-            await log_channel.send("🤖 機器人已啟動！正在監控語音頻道...", silent=True)
-            print(f"✅ 成功發送啟動訊息")
-        except Exception as e:
-            print(f"❌ 發送啟動訊息失敗: {e}")
-    else:
-        print(f"❌ 找不到記錄頻道 ID: {LOG_CHANNEL_ID}")
-    
-    # 檢查啟動時已在語音頻道的用戶
+    # 檢查啟動時已在語音頻道的用戶（不發送訊息）
     guild = bot.get_guild(GUILD_ID)
     if guild:
-        print(f"🔍 正在檢查伺服器「{guild.name}」的語音頻道...")
+        print(f"🔍 檢查伺服器「{guild.name}」")
         user_count = 0
         for voice_channel in guild.voice_channels:
             for member in voice_channel.members:
@@ -139,38 +127,48 @@ async def on_ready():
                         "topic": None,
                         "channel_name": voice_channel.name
                     }
-                    print(f"   👤 偵測到 {member.display_name} 已在 {voice_channel.name}")
+                    print(f"   👤 {member.display_name} 在 {voice_channel.name}")
                     user_count += 1
         
         bot_status["active_sessions"] = len(voice_sessions)
         
         if user_count == 0:
-            print("   ℹ️  目前沒有人在語音頻道")
+            print("   ℹ️  目前無人在語音頻道")
         else:
-            print(f"   ✅ 已開始追蹤 {user_count} 位用戶")
+            print(f"   ✅ 追蹤 {user_count} 位用戶")
     
-    # 同步 Slash 指令
-    print("\n🔄 正在同步 Slash 指令...")
+    # 同步 Slash 指令（關鍵修正）
+    print("\n🔄 同步指令中...")
     try:
+        # 方法 1：同步到特定伺服器（立即生效）
         guild_obj = discord.Object(id=GUILD_ID)
-        bot.tree.clear_commands(guild=guild_obj)
         synced = await bot.tree.sync(guild=guild_obj)
-        print(f"✅ 伺服器指令同步成功: {len(synced)} 個指令")
-        for cmd in synced:
-            print(f"   - /{cmd.name}: {cmd.description}")
+        print(f"✅ 同步成功: {len(synced)} 個指令")
+        
+        # 如果沒有同步到任何指令，嘗試全域同步
+        if len(synced) == 0:
+            print("⚠️  伺服器同步失敗，嘗試全域同步...")
+            synced = await bot.tree.sync()
+            print(f"✅ 全域同步: {len(synced)} 個指令")
+            
+    except discord.HTTPException as e:
+        print(f"❌ HTTP錯誤: {e.status} - {e.text}")
+        # 如果伺服器同步失敗，嘗試全域同步
+        try:
+            synced = await bot.tree.sync()
+            print(f"✅ 全域同步成功: {len(synced)} 個指令")
+        except Exception as e2:
+            print(f"❌ 全域同步也失敗: {e2}")
     except Exception as e:
         print(f"❌ 同步失敗: {e}")
     
     bot_status["is_ready"] = True
-    print("\n✨ 機器人已就緒！")
-    print("💡 請設定 UptimeRobot 監控：https://你的網址.onrender.com/health")
+    print("✨ 機器人就緒！\n")
 
-@bot.tree.command(
-    name="record",
-    description="設定本次語音學習主題",
-    guild=discord.Object(id=GUILD_ID)
-)
+# 修正：使用 None 作為 guild 參數，或者完全移除
+@bot.tree.command(name="record", description="設定本次語音學習主題")
 @app_commands.describe(topic="你想紀錄的主題，例如：微積分")
+@app_commands.guild_only()
 async def record(interaction: discord.Interaction, topic: str):
     user_id = interaction.user.id
     
@@ -216,7 +214,6 @@ async def on_voice_state_update(member, before, after):
                 f"⚠️ 注意！ **{member.display_name}** 已加入語音室 `{after.channel.name}`",
                 silent=True
             )
-            print(f"✅ 已發送加入通知")
         except Exception as e:
             print(f"❌ 發送加入通知失敗: {e}")
 
@@ -241,7 +238,7 @@ async def on_voice_state_update(member, before, after):
                 time_parts.append(f"{seconds}s")
             time_str = ''.join(time_parts)
             
-            print(f"➖ {member.display_name} 離開 {channel_name} (時長: {time_str})")
+            print(f"➖ {member.display_name} 離開 {channel_name} ({time_str})")
             
             try:
                 if topic:
@@ -254,7 +251,6 @@ async def on_voice_state_update(member, before, after):
                         f"🕐 {member.display_name} 在 {channel_name} 獨自升級 {time_str}    好耶 !",
                         silent=True
                     )
-                print(f"✅ 已發送離開紀錄")
             except Exception as e:
                 print(f"❌ 發送離開紀錄失敗: {e}")
             
@@ -263,14 +259,13 @@ async def on_voice_state_update(member, before, after):
     
     # 切換語音頻道
     elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-        print(f"🔄 {member.display_name} 從 {before.channel.name} 移動到 {after.channel.name}")
-        # 更新頻道名稱但保持計時
+        print(f"🔄 {member.display_name}: {before.channel.name} → {after.channel.name}")
         if user_id in voice_sessions:
             voice_sessions[user_id]["channel_name"] = after.channel.name
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    print(f"❌ 發生錯誤: {event}")
+    print(f"❌ 錯誤: {event}")
     import traceback
     traceback.print_exc()
 
@@ -278,22 +273,16 @@ async def on_error(event, *args, **kwargs):
 # 主程式啟動
 # =========================
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🚀 Inside_Curl Discord Bot 正在啟動...")
-    print("=" * 50)
+    print("🚀 Inside_Curl Discord Bot 啟動中...\n")
     
     # 啟動 FastAPI (背景執行)
     web_thread = threading.Thread(target=run_web, daemon=True)
     web_thread.start()
-    
-    # 等待 Web Server 啟動
-    print("⏳ 等待 FastAPI 啟動...")
-    time.sleep(2)
-    print("✅ FastAPI 已啟動\n")
+    time.sleep(1.5)
     
     # 啟動 Discord Bot (主執行緒)
     try:
-        print("🤖 正在連接 Discord...")
+        print("🤖 連接 Discord...\n")
         bot.run(TOKEN)
     except discord.LoginFailure:
         print("❌ 登入失敗：TOKEN 無效")
