@@ -212,7 +212,7 @@ async def on_voice_state_update(member, before, after):
         try:
             await log_channel.send(
                 f"⚠️ 注意！ **{member.display_name}** 已加入語音室 `{after.channel.name}`",
-                silent=True
+                silent=False
             )
         except Exception as e:
             print(f"❌ 發送加入通知失敗: {e}")
@@ -243,7 +243,7 @@ async def on_voice_state_update(member, before, after):
             try:
                 if topic:
                     await log_channel.send(
-                        f"🕐 {member.display_name} 在 {channel_name} 研讀ㄌ **{topic}** {time_str}    好耶 !",
+                        f"🕐 {member.display_name} 在 {channel_name} **{topic}** {time_str}    好耶 !",
                         silent=True
                     )
                 else:
@@ -290,3 +290,4 @@ if __name__ == "__main__":
         print(f"❌ 啟動失敗: {e}")
         import traceback
         traceback.print_exc()
+
