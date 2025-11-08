@@ -1,7 +1,11 @@
 # GPT
+# =========================
+# Inside_Curl.py (FastAPI + Discord Bot + /health)
+# =========================
 import os
 import threading
 import datetime
+import time
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -21,41 +25,40 @@ def home():
         "author": "Rae's FastAPI wrapper"
     }
 
+@app.get("/health")
+def health():
+    """健康檢查路徑，用於 Render 健康檢測"""
+    return {"status": "ok", "bot_status": "running"}
+
 def run_web():
-    """讓 Render 偵測到 Web 服務用"""
+    """啟動 FastAPI Web Service"""
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 # =========================
 # Discord Bot 主體（完全保留原邏輯）
 # =========================
-
 TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
 GUILD_ID = int(os.getenv("GUILD_ID", 0))
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0))
 
-# 如果不想用環境變數，可以直接填寫（不建議）
-# TOKEN = "你的機器人TOKEN"
-# GUILD_ID = 你的伺服器ID
-# LOG_CHANNEL_ID = 記錄頻道ID
-
 if not TOKEN or GUILD_ID == 0 or LOG_CHANNEL_ID == 0:
     print("❌ 錯誤：請設定 DISCORD_BOT_TOKEN、GUILD_ID 和 LOG_CHANNEL_ID")
-    print("方法 1: 設定環境變數")
-    print("方法 2: 直接在程式碼中填寫（第 9-11 行）")
     exit(1)
 
 intents = discord.Intents.default()
 intents.voice_states = True
 intents.guilds = True
 intents.members = True
-intents.message_content = True  # 消除警告
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 voice_sessions = {}  # user_id: {"join_time": datetime, "topic": str, "channel_name": str}
 
-
+# =========================
+# Discord 事件 & 指令
+# =========================
 @bot.event
 async def on_ready():
     print(f"✅ 已登入：{bot.user}")
@@ -76,7 +79,6 @@ async def on_ready():
                     }
                     print(f"   👤 偵測到 {member.display_name} 已在 {voice_channel.name}")
                     user_count += 1
-        
         if user_count == 0:
             print("   ℹ️ 目前沒有人在語音頻道")
     else:
@@ -91,7 +93,6 @@ async def on_ready():
             print(f"   - /{cmd.name}: {cmd.description}")
     except discord.HTTPException as e:
         print(f"❌ 同步失敗 (HTTP錯誤): {e}")
-        print("   可能原因：機器人沒有 applications.commands 權限")
     except Exception as e:
         print(f"❌ 同步失敗: {e}")
     
@@ -156,7 +157,6 @@ async def on_voice_state_update(member, before, after):
             total_seconds = int(duration.total_seconds())
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
-
             time_parts = []
             if hours > 0:
                 time_parts.append(f"{hours}h")
@@ -199,9 +199,12 @@ async def on_error(event, *args, **kwargs):
 # 啟動（FastAPI + Discord）
 # =========================
 if __name__ == "__main__":
-    # 啟動 FastAPI 伺服器（在背景執行）
+    # 啟動 FastAPI 伺服器（背景執行）
     threading.Thread(target=run_web, daemon=True).start()
-
+    
+    # 等 1 秒讓 Web Server 完全啟動
+    time.sleep(1)
+    
     # 啟動 Discord Bot（保持原邏輯）
     try:
         bot.run(TOKEN)
@@ -209,6 +212,7 @@ if __name__ == "__main__":
         print("❌ 登入失敗：TOKEN 無效")
     except Exception as e:
         print(f"❌ 啟動失敗: {e}")
+
 
 
 
